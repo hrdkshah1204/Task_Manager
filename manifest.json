@@ -1,0 +1,13 @@
+{
+  "background_color": "#ffffff",
+  "description": "This is a web app for task manager that can run locally",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Task Master",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Tasker",
+  "start_url": "/",
+  "theme_color": "#ebeabd",
+  "id": "TMA_1204"
+}
