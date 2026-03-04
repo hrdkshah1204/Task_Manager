@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Project Manager</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #0f172a; --card: #ffffff; --border: #cbd5e1; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; padding-bottom: 70px; }
+        h2, h3 { color: var(--primary); margin-top: 0; }
+        .container { padding: 15px; max-width: 800px; margin: 0 auto; }
+        
+        /* Navigation (Scrollable horizontally for mobile) */
+        .nav-bar { display: flex; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; padding: 10px; gap: 10px; white-space: nowrap; }
+        .nav-btn { background: #e2e8f0; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .nav-btn.active { background: var(--primary); color: white; }
+
+        /* General UI */
+        .card { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input, select, button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid var(--border); box-sizing: border-box; font-size: 14px; }
+        button.action-btn { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .flex-row { display: flex; gap: 10px; }
+        .hidden { display: none !important; }
+
+        /* Lists & Items */
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); }
+        .list-item:last-child { border-bottom: none; }
+        .item-details { display: flex; flex-direction: column; flex: 1; }
+        .item-title { font-weight: bold; }
+        .item-sub { font-size: 12px; color: #64748b; }
+        .icon-btn { background: transparent; border: none; padding: 5px; cursor: pointer; font-size: 16px; width: auto; margin: 0; }
+        .text-blue { color: var(--primary); } .text-red { color: #ef4444; } .text-green { color: #10b981; } .text-orange { color: #f59e0b; }
+
+        /* Kanban & Matrix Grids */
+        .grid-container { display: grid; gap: 15px; grid-template-columns: 1fr; }
+        @media (min-width: 600px) { .grid-container { grid-template-columns: 1fr 1fr; } }
+        .board-col { background: #f1f5f9; padding: 10px; border-radius: 8px; border-top: 4px solid var(--border); }
+        .task-card { background: white; padding: 10px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 10px; border-left: 3px solid var(--primary); }
+        .task-card select { margin-top: 5px; padding: 5px; font-size: 12px; }
+
+        /* Chart Area */
+        #chart-container { display: flex; flex-direction: column; align-items: center; margin-top: 20px; }
+        #pie-chart { max-width: 100%; height: auto; }
+        .legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; font-size: 12px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-color { width: 12px; height: 12px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <button class="nav-btn active" onclick="switchTab(1)">1. Add Task</button>
+        <button class="nav-btn" onclick="switchTab(2)">2. Matrix</button>
+        <button class="nav-btn" onclick="switchTab(3)">3. Teams</button>
+        <button class="nav-btn" onclick="switchTab(4)">4. Assign</button>
+        <button class="nav-btn" onclick="switchTab(5)">5. Progress</button>
+        <button class="nav-btn" onclick="switchTab(6)">6. Charts</button>
+    </div>
+
+    <div class="container">
+        
+        <button id="audio-init-btn" class="action-btn" style="background: #10b981; margin-bottom: 15px;" onclick="initSystem()">Enable Sound & Notifications</button>
+
+        <div id="screen-1" class="screen">
+            <div class="card">
+                <h2>Add / Edit Task</h2>
+                <input type="hidden" id="t-id">
+                <input type="text" id="t-name" placeholder="Task Description...">
+                <input type="datetime-local" id="t-deadline">
+                <select id="t-matrix">
+                    <option value="ui">Urgent & Important (UI)</option>
+                    <option value="uni">Urgent & Not Important (UNI)</option>
+                    <option value="nui">Not Urgent & Important (NUI)</option>
+                    <option value="nuni">Not Urgent & Not Important (NUNI)</option>
+                </select>
+                <div class="flex-row">
+                    <button class="action-btn" id="t-submit" onclick="saveTask()">Save Task</button>
+                    <button class="action-btn hidden" id="t-cancel" style="background: #64748b;" onclick="cancelTaskEdit()">Cancel</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>All Created Tasks</h3>
+                <div id="all-tasks-list"></div>
+            </div>
+        </div>
+
+        <div id="screen-2" class="screen hidden">
+            <div class="grid-container">
+                <div class="board-col" style="border-top-color: #dc2626;"><h3>Urgent-Important</h3><div id="m-ui"></div></div>
+                <div class="board-col" style="border-top-color: #f59e0b;"><h3>Urgent-Not Important</h3><div id="m-uni"></div></div>
+                <div class="board-col" style="border-top-color: #2563eb;"><h3>Not Urgent-Important</h3><div id="m-nui"></div></div>
+                <div class="board-col" style="border-top-color: #64748b;"><h3>Not Urgent-Not Important</h3><div id="m-nuni"></div></div>
+            </div>
+        </div>
+
+        <div id="screen-3" class="screen hidden">
+            <div class="card">
+                <h2>Manage Teams</h2>
+                <input type="hidden" id="tm-id">
+                <div class="flex-row">
+                    <input type="text" id="tm-name" placeholder="Team Name (e.g., Alpha Squad)">
+                    <button class="action-btn" style="margin-top: 8px; width: 80px;" onclick="saveTeam()">Save</button>
+                </div>
+                <div id="team-list" style="margin-top: 15px;"></div>
+            </div>
+
+            <div class="card">
+                <h2>Manage Members</h2>
+                <input type="hidden" id="mem-id">
+                <input type="text" id="mem-name" placeholder="Member Name">
+                <select id="mem-team"><option value="">Select Team...</option></select>
+                <div class="flex-row">
+                    <button class="action-btn" onclick="saveMember()">Save Member</button>
+                    <button class="action-btn hidden" id="mem-cancel" style="background: #64748b;" onclick="cancelMemberEdit()">Cancel</button>
+                </div>
+                <div id="member-list" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+
+        <div id="screen-4" class="screen hidden">
+            <div class="card">
+                <h2>Assign Tasks</h2>
+                <select id="asg-task"><option value="">Select Task...</option></select>
+                <select id="asg-type" onchange="updateAssigneeDropdown()">
+                    <option value="team">Assign to Team</option>
+                    <option value="member">Assign to Specific Member</option>
+                </select>
+                <select id="asg-target"></select>
+                <button class="action-btn" onclick="assignTask()">Assign Task</button>
+            </div>
+            <div class="card">
+                <h3>Latest Assignments</h3>
+                <div id="assignment-list"></div>
+            </div>
+        </div>
+
+        <div id="screen-5" class="screen hidden">
+            <div class="grid-container">
+                <div class="board-col" style="border-top-color: #ef4444;"><h3>Over Due</h3><div id="p-overdue"></div></div>
+                <div class="board-col" style="border-top-color: #64748b;"><h3>To Do</h3><div id="p-todo"></div></div>
+                <div class="board-col" style="border-top-color: #f59e0b;"><h3>WIP</h3><div id="p-wip"></div></div>
+                <div class="board-col" style="border-top-color: #10b981;"><h3>Done</h3><div id="p-done"></div></div>
+                <div class="board-col" style="border-top-color: #94a3b8;"><h3>On Hold</h3><div id="p-onhold"></div></div>
+            </div>
+        </div>
+
+        <div id="screen-6" class="screen hidden">
+            <div class="card">
+                <h2>Progress Chart</h2>
+                <div class="flex-row">
+                    <select id="ch-team"><option value="all">All Teams</option></select>
+                    <select id="ch-month">
+                        <option value="all">All Months</option>
+                        <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+                        <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+                        <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+                        <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+                    </select>
+                    <select id="ch-year">
+                        <option value="all">All Years</option>
+                        <option value="2026">2026</option><option value="2027">2027</option>
+                    </select>
+                </div>
+                <button class="action-btn" onclick="renderChart()">Generate Chart</button>
+                
+                <div id="chart-container">
+                    <canvas id="pie-chart" width="250" height="250"></canvas>
+                    <h3 id="chart-total" style="margin-top: 15px;">Total Tasks: 0</h3>
+                    <div id="chart-legend" class="legend"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    let tasks = JSON.parse(localStorage.getItem('ppm_tasks')) || [];
+    let teams = JSON.parse(localStorage.getItem('ppm_teams')) || [];
+    let members = JSON.parse(localStorage.getItem('ppm_members')) || [];
+    let audioCtx = null;
+
+    function saveData() {
+        localStorage.setItem('ppm_tasks', JSON.stringify(tasks));
+        localStorage.setItem('ppm_teams', JSON.stringify(teams));
+        localStorage.setItem('ppm_members', JSON.stringify(members));
+        refreshAllViews();
+    }
+
+    // --- NAVIGATION ---
+    function switchTab(screenNum) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(`screen-${screenNum}`).classList.remove('hidden');
+        document.querySelectorAll('.nav-btn').forEach((b, i) => {
+            if (i + 1 === screenNum) b.classList.add('active');
+            else b.classList.remove('active');
+        });
+        if (screenNum === 6) renderChart(); // Auto-draw chart on open
+    }
+
+    // --- AUDIO & NOTIFICATIONS ---
+    function initSystem() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+        document.getElementById('audio-init-btn').style.display = 'none';
+        alert("System initialized.");
+    }
+
+    function playBeep() {
+        try {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+        } catch(e) { console.log(e); }
+    }
+
+    // --- SCREEN 1 & 2: TASKS & MATRIX ---
+    function saveTask() {
+        const id = document.getElementById('t-id').value;
+        const name = document.getElementById('t-name').value.trim();
+        const deadline = document.getElementById('t-deadline').value;
+        const matrix = document.getElementById('t-matrix').value;
+        
+        if (!name) return alert("Task name required.");
+
+        // Duplicate Check (Ensures case-insensitive match and ignores if you are just editing the same task)
+        const duplicate = tasks.find(t => t.name.toLowerCase() === name.toLowerCase() && t.id != id);
+        if (duplicate) {
+            const dateStr = duplicate.deadline ? new Date(duplicate.deadline).toLocaleString() : 'No End Date';
+            alert(`Duplicate entry for this task.\n\nIt is added as:\nName: ${duplicate.name}\nEnd Date: ${dateStr}\nCategory: ${duplicate.matrix.toUpperCase()}`);
+            return; // Stop the save process
+        }
+
+        if (id) {
+            const t = tasks.find(x => x.id == id);
+            t.name = name; t.deadline = deadline; t.matrix = matrix; t.notified = false;
+        } else {
+            tasks.push({ id: Date.now(), name, deadline, matrix, status: 'todo', assignType: 'none', assignId: null, notified: false });
+        }
+        cancelTaskEdit();
+        saveData();
+    }
+
+    function editTask(id) {
+        const t = tasks.find(x => x.id == id);
+        document.getElementById('t-id').value = t.id;
+        document.getElementById('t-name').value = t.name;
+        document.getElementById('t-deadline').value = t.deadline || '';
+        document.getElementById('t-matrix').value = t.matrix;
+        document.getElementById('t-submit').innerText = "Update Task";
+        document.getElementById('t-cancel').classList.remove('hidden');
+        switchTab(1);
+    }
+
+    function cancelTaskEdit() {
+        document.getElementById('t-id').value = '';
+        document.getElementById('t-name').value = '';
+        document.getElementById('t-deadline').value = '';
+        document.getElementById('t-submit').innerText = "Save Task";
+        document.getElementById('t-cancel').classList.add('hidden');
+    }
+
+    function deleteTask(id) {
+        if(confirm("Delete this task?")) { tasks = tasks.filter(t => t.id !== id); saveData(); }
+    }
+
+    function renderAllTasksList() {
+        const list = document.getElementById('all-tasks-list');
+        list.innerHTML = '';
+        
+        if (tasks.length === 0) {
+            list.innerHTML = '<div style="color: #64748b; font-size: 14px; text-align: center; padding: 10px;">No tasks added yet.</div>';
+            return;
+        }
+
+        tasks.forEach(t => {
+            const dateStr = t.deadline ? new Date(t.deadline).toLocaleString() : 'No End Date';
+            list.innerHTML += `
+                <div class="list-item">
+                    <div class="item-details">
+                        <span class="item-title ${t.status === 'done' ? 'text-green' : ''}">${t.name}</span>
+                        <span class="item-sub">${dateStr}</span>
+                    </div>
+                    <div>
+                        <button class="icon-btn text-blue" onclick="editTask(${t.id})">✎</button>
+                        <button class="icon-btn text-red" onclick="deleteTask(${t.id})">✖</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function renderMatrix() {
+        ['ui', 'uni', 'nui', 'nuni'].forEach(id => document.getElementById(`m-${id}`).innerHTML = '');
+        tasks.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.innerHTML = `
+                <div class="item-details">
+                    <span class="item-title ${t.status === 'done' ? 'text-green' : ''}">${t.name}</span>
+                    <span class="item-sub">${t.deadline ? new Date(t.deadline).toLocaleString() : 'No Deadline'}</span>
+                </div>
+                <div>
+                    <button class="icon-btn text-blue" onclick="editTask(${t.id})">✎</button>
+                    <button class="icon-btn text-red" onclick="deleteTask(${t.id})">✖</button>
+                </div>
+            `;
+            document.getElementById(`m-${t.matrix}`).appendChild(div);
+        });
+    }
+
+    // --- SCREEN 3: TEAMS & MEMBERS ---
+    function saveTeam() {
+        const id = document.getElementById('tm-id').value;
+        const name = document.getElementById('tm-name').value;
+        if (!name) return alert("Team name required.");
+        if (id) teams.find(x => x.id == id).name = name;
+        else teams.push({ id: Date.now(), name });
+        document.getElementById('tm-id').value = '';
+        document.getElementById('tm-name').value = '';
+        saveData();
+    }
+
+    function editTeam(id) {
+        document.getElementById('tm-id').value = id;
+        document.getElementById('tm-name').value = teams.find(x => x.id == id).name;
+    }
+
+    function deleteTeam(id) {
+        if(confirm("Delete team? Members will lose team association.")) {
+            teams = teams.filter(t => t.id !== id);
+            members.forEach(m => { if(m.teamId == id) m.teamId = null; });
+            saveData();
+        }
+    }
+
+    function saveMember() {
+        const id = document.getElementById('mem-id').value;
+        const name = document.getElementById('mem-name').value;
+        const teamId = document.getElementById('mem-team').value;
+        if (!name) return alert("Member name required.");
+        if (id) {
+            const m = members.find(x => x.id == id);
+            m.name = name; m.teamId = teamId;
+        } else {
+            members.push({ id: Date.now(), name, teamId });
+        }
+        cancelMemberEdit();
+        saveData();
+    }
+
+    function editMember(id) {
+        const m = members.find(x => x.id == id);
+        document.getElementById('mem-id').value = m.id;
+        document.getElementById('mem-name').value = m.name;
+        document.getElementById('mem-team').value = m.teamId || '';
+        document.getElementById('mem-cancel').classList.remove('hidden');
+    }
+
+    function cancelMemberEdit() {
+        document.getElementById('mem-id').value = '';
+        document.getElementById('mem-name').value = '';
+        document.getElementById('mem-team').value = '';
+        document.getElementById('mem-cancel').classList.add('hidden');
+    }
+
+    function deleteMember(id) {
+        if(confirm("Delete member?")) { members = members.filter(m => m.id !== id); saveData(); }
+    }
+
+    function renderTeams() {
+        const tList = document.getElementById('team-list'); tList.innerHTML = '';
+        teams.forEach(t => {
+            tList.innerHTML += `<div class="list-item"><span class="item-title">${t.name}</span>
+            <div><button class="icon-btn text-blue" onclick="editTeam(${t.id})">✎</button>
+            <button class="icon-btn text-red" onclick="deleteTeam(${t.id})">✖</button></div></div>`;
+        });
+
+        const mList = document.getElementById('member-list'); mList.innerHTML = '';
+        members.forEach(m => {
+            const tName = m.teamId ? teams.find(x => x.id == m.teamId)?.name || 'Unknown' : 'No Team';
+            mList.innerHTML += `<div class="list-item">
+            <div class="item-details"><span class="item-title">${m.name}</span><span class="item-sub">${tName}</span></div>
+            <div><button class="icon-btn text-blue" onclick="editMember(${m.id})">✎</button>
+            <button class="icon-btn text-red" onclick="deleteMember(${m.id})">✖</button></div></div>`;
+        });
+    }
+
+    // --- SCREEN 4: ASSIGNMENTS ---
+    function updateAssigneeDropdown() {
+        const type = document.getElementById('asg-type').value;
+        const target = document.getElementById('asg-target');
+        target.innerHTML = '';
+        if (type === 'team') {
+            teams.forEach(t => target.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+        } else {
+            members.forEach(m => target.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+        }
+    }
+
+    function assignTask() {
+        const tId = document.getElementById('asg-task').value;
+        const type = document.getElementById('asg-type').value;
+        const targetId = document.getElementById('asg-target').value;
+        if (!tId || !targetId) return alert("Select task and assignee.");
+        
+        const t = tasks.find(x => x.id == tId);
+        t.assignType = type; t.assignId = targetId;
+        saveData();
+    }
+
+    function removeAssignment(tId) {
+        const t = tasks.find(x => x.id == tId);
+        t.assignType = 'none'; t.assignId = null;
+        saveData();
+    }
+
+    function renderAssignments() {
+        const list = document.getElementById('assignment-list'); list.innerHTML = '';
+        tasks.filter(t => t.assignType !== 'none').forEach(t => {
+            let assigneeName = "Unknown";
+            if (t.assignType === 'team') assigneeName = teams.find(x => x.id == t.assignId)?.name || "Deleted Team";
+            if (t.assignType === 'member') assigneeName = members.find(x => x.id == t.assignId)?.name || "Deleted Member";
+            
+            list.innerHTML += `<div class="list-item">
+            <div class="item-details"><span class="item-title">${t.name}</span><span class="item-sub text-blue">assigned to ${assigneeName}</span></div>
+            <div><button class="icon-btn text-red" onclick="removeAssignment(${t.id})" title="Remove Assignment">✖</button></div></div>`;
+        });
+    }
+
+    // --- SCREEN 5: PROGRESS DASHBOARD ---
+    function updateTaskStatus(tId, selectObj) {
+        tasks.find(x => x.id == tId).status = selectObj.value;
+        saveData();
+    }
+
+    function renderProgress() {
+        ['todo', 'wip', 'done', 'onhold', 'overdue'].forEach(id => document.getElementById(`p-${id}`).innerHTML = '');
+        const now = new Date().getTime();
+
+        tasks.forEach(t => {
+            const isOverdue = t.status !== 'done' && t.deadline && new Date(t.deadline).getTime() < now;
+            let assignee = "Unassigned";
+            if (t.assignType === 'team') assignee = "Team: " + (teams.find(x => x.id == t.assignId)?.name || "Del");
+            if (t.assignType === 'member') assignee = (members.find(x => x.id == t.assignId)?.name || "Del");
+
+            const card = `
+                <div class="task-card">
+                    <div class="item-title">${t.name}</div>
+                    <div class="item-sub">${assignee}</div>
+                    <select onchange="updateTaskStatus(${t.id}, this)">
+                        <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>To Do</option>
+                        <option value="wip" ${t.status === 'wip' ? 'selected' : ''}>WIP</option>
+                        <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
+                        <option value="onhold" ${t.status === 'onhold' ? 'selected' : ''}>On Hold</option>
+                    </select>
+                </div>`;
+            
+            if (isOverdue) document.getElementById('p-overdue').innerHTML += card;
+            else document.getElementById(`p-${t.status}`).innerHTML += card;
+        });
+    }
+
+    // --- SCREEN 6: CHARTS ---
+    function renderChart() {
+        const tFilt = document.getElementById('ch-team').value;
+        const mFilt = document.getElementById('ch-month').value;
+        const yFilt = document.getElementById('ch-year').value;
+        const now = new Date().getTime();
+
+        let filtered = tasks.filter(t => {
+            let passTeam = false;
+            if (tFilt === 'all') passTeam = true;
+            else if (t.assignType === 'team' && t.assignId == tFilt) passTeam = true;
+            else if (t.assignType === 'member') {
+                const m = members.find(x => x.id == t.assignId);
+                if (m && m.teamId == tFilt) passTeam = true;
+            }
+
+            let passDate = true;
+            if (t.deadline) {
+                const d = new Date(t.deadline);
+                if (mFilt !== 'all' && d.getMonth() != mFilt) passDate = false;
+                if (yFilt !== 'all' && d.getFullYear() != yFilt) passDate = false;
+            } else if (mFilt !== 'all' || yFilt !== 'all') {
+                passDate = false; 
+            }
+
+            return passTeam && passDate;
+        });
+
+        const counts = { todo: 0, wip: 0, done: 0, onhold: 0, overdue: 0 };
+        filtered.forEach(t => {
+            if (t.status !== 'done' && t.deadline && new Date(t.deadline).getTime() < now) counts.overdue++;
+            else counts[t.status]++;
+        });
+
+        const data = [
+            { label: 'To Do', count: counts.todo, color: '#64748b' },
+            { label: 'WIP', count: counts.wip, color: '#f59e0b' },
+            { label: 'Done', count: counts.done, color: '#10b981' },
+            { label: 'On Hold', count: counts.onhold, color: '#94a3b8' },
+            { label: 'Over Due', count: counts.overdue, color: '#ef4444' }
+        ].filter(d => d.count > 0);
+
+        document.getElementById('chart-total').innerText = `Total Tasks: ${filtered.length}`;
+        drawPieChart(data);
+    }
+
+    function drawPieChart(data) {
+        const canvas = document.getElementById('pie-chart');
+        const ctx = canvas.getContext('2d');
+        const leg = document.getElementById('chart-legend');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        leg.innerHTML = '';
+
+        if (data.length === 0) {
+            ctx.fillStyle = "#e2e8f0";
+            ctx.beginPath(); ctx.arc(125, 125, 100, 0, 2 * Math.PI); ctx.fill();
+            return;
+        }
+
+        let total = data.reduce((sum, d) => sum + d.count, 0);
+        let startAngle = -Math.PI / 2; 
+
+        data.forEach(d => {
+            const sliceAngle = (2 * Math.PI * d.count) / total;
+            ctx.beginPath();
+            ctx.moveTo(125, 125);
+            ctx.arc(125, 125, 100, startAngle, startAngle + sliceAngle);
+            ctx.fillStyle = d.color;
+            ctx.fill();
+            ctx.stroke();
+            startAngle += sliceAngle;
+
+            leg.innerHTML += `<div class="legend-item"><div class="legend-color" style="background:${d.color}"></div>${d.label} (${d.count})</div>`;
+        });
+    }
+
+    // --- GLOBAL REFRESH & BACKGROUND WORKER ---
+    function refreshAllViews() {
+        renderAllTasksList(); // Added new list rendering here
+        renderMatrix();
+        renderTeams();
+        renderProgress();
+        renderAssignments();
+        
+        const asgTask = document.getElementById('asg-task'); asgTask.innerHTML = '<option value="">Select Task...</option>';
+        tasks.forEach(t => asgTask.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+        
+        const memTeam = document.getElementById('mem-team'); memTeam.innerHTML = '<option value="">Select Team...</option>';
+        teams.forEach(t => memTeam.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+
+        const chTeam = document.getElementById('ch-team'); chTeam.innerHTML = '<option value="all">All Teams</option>';
+        teams.forEach(t => chTeam.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+        
+        updateAssigneeDropdown();
+        if(!document.getElementById('screen-6').classList.contains('hidden')) renderChart();
+    }
+
+    function checkSystemOverdue() {
+        const now = new Date().getTime();
+        let changed = false;
+        tasks.forEach(t => {
+            if (t.status !== 'done' && t.deadline && !t.notified && new Date(t.deadline).getTime() < now) {
+                if ("Notification" in window && Notification.permission === "granted") {
+                    new Notification("Task Overdue!", { body: `Task: ${t.name}`, icon: "https://cdn-icons-png.flaticon.com/512/565/565360.png" });
+                    playBeep();
+                }
+                t.notified = true; changed = true;
+            }
+        });
+        if(changed) saveData();
+    }
+
+    // Init
+    refreshAllViews();
+    setInterval(checkSystemOverdue, 60000);
+
+</script>
+</body>
+</html>
