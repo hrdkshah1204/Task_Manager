@@ -133,3 +133,550 @@
         <div id="screen-2" class="screen hidden">
             <div class="grid-container">
                 <div class="board-col" style="border-left-color: #dc2626;"><h3 style="color: #dc2626;">Urgent - Important</h3><div id="m-ui"></div></div>
+                <div class="board-col" style="border-left-color: #f59e0b;"><h3 style="color: #f59e0b;">Urgent - Not Important</h3><div id="m-uni"></div></div>
+                <div class="board-col" style="border-left-color: #2563eb;"><h3 style="color: #2563eb;">Not Urgent - Important</h3><div id="m-nui"></div></div>
+                <div class="board-col" style="border-left-color: #64748b;"><h3 style="color: #64748b;">Not Urgent - Not Important</h3><div id="m-nuni"></div></div>
+            </div>
+        </div>
+
+        <div id="screen-3" class="screen hidden">
+            <div class="card">
+                <h2>Manage Teams</h2>
+                <input type="hidden" id="tm-id">
+                <div class="flex-row">
+                    <input type="text" id="tm-name" placeholder="Team Name (e.g., Alpha)">
+                    <button class="action-btn" style="margin-top: 8px; width: 80px;" onclick="saveTeam()">Add</button>
+                </div>
+                <input type="text" id="search-teams" class="search-bar" style="margin-top: 15px;" placeholder="🔍 Search teams..." onkeyup="renderTeams()">
+                <div id="team-list"></div>
+            </div>
+
+            <div class="card">
+                <h2>Manage Members</h2>
+                <input type="hidden" id="mem-id">
+                <input type="text" id="mem-name" placeholder="Member Name">
+                <select id="mem-team"><option value="">Select Team...</option></select>
+                <div class="flex-row">
+                    <button class="action-btn" onclick="saveMember()">Save Member</button>
+                    <button class="action-btn hidden" id="mem-cancel" style="background: #64748b;" onclick="cancelMemberEdit()">Cancel</button>
+                </div>
+                <input type="text" id="search-members" class="search-bar" style="margin-top: 15px;" placeholder="🔍 Search members..." onkeyup="renderTeams()">
+                <div id="member-list"></div>
+            </div>
+        </div>
+
+        <div id="screen-4" class="screen hidden">
+            <div class="card">
+                <h2>Assign Tasks</h2>
+                <select id="asg-task"><option value="">Select Task...</option></select>
+                <select id="asg-type" onchange="updateAssigneeDropdown()">
+                    <option value="team">Assign to Team</option>
+                    <option value="member">Assign to Specific Member</option>
+                </select>
+                <select id="asg-target"></select>
+                <button class="action-btn" onclick="assignTask()">Assign Task</button>
+            </div>
+            <div class="card">
+                <h3>Latest Assignments</h3>
+                <div id="assignment-list"></div>
+            </div>
+        </div>
+
+        <div id="screen-5" class="screen hidden">
+            <div class="grid-container">
+                <div class="board-col" style="border-left-color: #ef4444;"><h3 style="color: #ef4444;">Over Due</h3><div id="p-overdue"></div></div>
+                <div class="board-col" style="border-left-color: #64748b;"><h3 style="color: #64748b;">To Do</h3><div id="p-todo"></div></div>
+                <div class="board-col" style="border-left-color: #f59e0b;"><h3 style="color: #f59e0b;">WIP</h3><div id="p-wip"></div></div>
+                <div class="board-col" style="border-left-color: #10b981;"><h3 style="color: #10b981;">Done</h3><div id="p-done"></div></div>
+                <div class="board-col" style="border-left-color: #94a3b8;"><h3 style="color: #94a3b8;">On Hold</h3><div id="p-onhold"></div></div>
+            </div>
+        </div>
+
+        <div id="screen-6" class="screen hidden">
+            <div class="card">
+                <h2>Progress Chart</h2>
+                <select id="ch-team" style="margin-bottom: 5px;"><option value="all">All Teams</option></select>
+                <div class="flex-row">
+                    <select id="ch-month">
+                        <option value="all">All Months</option>
+                        <option value="0">Jan</option><option value="1">Feb</option><option value="2">Mar</option>
+                        <option value="3">Apr</option><option value="4">May</option><option value="5">Jun</option>
+                        <option value="6">Jul</option><option value="7">Aug</option><option value="8">Sep</option>
+                        <option value="9">Oct</option><option value="10">Nov</option><option value="11">Dec</option>
+                    </select>
+                    <select id="ch-year">
+                        <option value="all">All Years</option>
+                        <option value="2026">2026</option><option value="2027">2027</option>
+                    </select>
+                </div>
+                <button class="action-btn" onclick="renderChart()">Generate Chart</button>
+                
+                <div id="chart-container">
+                    <canvas id="pie-chart" width="250" height="250"></canvas>
+                    <h3 id="chart-total" style="margin-top: 15px;">Total Tasks: 0</h3>
+                    <div id="chart-legend" class="legend"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-bar">
+        <button class="nav-btn active" onclick="switchTab(1)">Add Task</button>
+        <button class="nav-btn" onclick="switchTab(2)">Matrix</button>
+        <button class="nav-btn" onclick="switchTab(3)">Teams</button>
+        <button class="nav-btn" onclick="switchTab(4)">Assign</button>
+        <button class="nav-btn" onclick="switchTab(5)">Progress</button>
+        <button class="nav-btn" onclick="switchTab(6)">Charts</button>
+    </div>
+
+<script>
+    // --- SERVICE WORKER REGISTRATION (REQUIRED FOR PWA/APK) ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW failed: ', err));
+      });
+    }
+
+    // --- STATE MANAGEMENT ---
+    let tasks = JSON.parse(localStorage.getItem('ppm_tasks')) || [];
+    let teams = JSON.parse(localStorage.getItem('ppm_teams')) || [];
+    let members = JSON.parse(localStorage.getItem('ppm_members')) || [];
+    let audioCtx = null;
+
+    function saveData() {
+        localStorage.setItem('ppm_tasks', JSON.stringify(tasks));
+        localStorage.setItem('ppm_teams', JSON.stringify(teams));
+        localStorage.setItem('ppm_members', JSON.stringify(members));
+        refreshAllViews();
+    }
+
+    // --- NAVIGATION ---
+    function switchTab(screenNum) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(`screen-${screenNum}`).classList.remove('hidden');
+        document.querySelectorAll('.nav-btn').forEach((b, i) => {
+            if (i + 1 === screenNum) b.classList.add('active');
+            else b.classList.remove('active');
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (screenNum === 6) renderChart(); 
+    }
+
+    // --- AUDIO & NOTIFICATIONS ---
+    function initSystem() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+        document.getElementById('audio-init-btn').style.display = 'none';
+    }
+
+    function playBeep() {
+        try {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+        } catch(e) { console.log(e); }
+    }
+
+    // --- SCREEN 1 & 2: TASKS & MATRIX ---
+    function saveTask() {
+        const id = document.getElementById('t-id').value;
+        const name = document.getElementById('t-name').value.trim();
+        const deadline = document.getElementById('t-deadline').value;
+        const matrix = document.getElementById('t-matrix').value;
+        
+        if (!name) return alert("Task name required.");
+
+        const duplicate = tasks.find(t => t.name.toLowerCase() === name.toLowerCase() && t.id != id);
+        if (duplicate) {
+            const dateStr = duplicate.deadline ? new Date(duplicate.deadline).toLocaleString() : 'No End Date';
+            alert(`Duplicate entry for this task.\n\nIt is added as:\nName: ${duplicate.name}\nEnd Date: ${dateStr}\nCategory: ${duplicate.matrix.toUpperCase()}`);
+            return; 
+        }
+
+        if (id) {
+            const t = tasks.find(x => x.id == id);
+            t.name = name; t.deadline = deadline; t.matrix = matrix; t.notified = false;
+        } else {
+            tasks.push({ id: Date.now(), name, deadline, matrix, status: 'todo', assignType: 'none', assignId: null, notified: false });
+        }
+        cancelTaskEdit();
+        saveData();
+    }
+
+    function editTask(id) {
+        const t = tasks.find(x => x.id == id);
+        document.getElementById('t-id').value = t.id;
+        document.getElementById('t-name').value = t.name;
+        document.getElementById('t-deadline').value = t.deadline || '';
+        document.getElementById('t-matrix').value = t.matrix;
+        document.getElementById('t-submit').innerText = "Update Task";
+        document.getElementById('t-cancel').classList.remove('hidden');
+        switchTab(1);
+    }
+
+    function cancelTaskEdit() {
+        document.getElementById('t-id').value = '';
+        document.getElementById('t-name').value = '';
+        document.getElementById('t-deadline').value = '';
+        document.getElementById('t-submit').innerText = "Save Task";
+        document.getElementById('t-cancel').classList.add('hidden');
+    }
+
+    function deleteTask(id) {
+        if(confirm("Delete this task?")) { tasks = tasks.filter(t => t.id !== id); saveData(); }
+    }
+
+    function renderAllTasksList() {
+        const list = document.getElementById('all-tasks-list');
+        const searchTerm = document.getElementById('search-tasks').value.toLowerCase();
+        list.innerHTML = '';
+        
+        const filteredTasks = tasks.filter(t => t.name.toLowerCase().includes(searchTerm));
+
+        if (filteredTasks.length === 0) {
+            list.innerHTML = '<div style="color: #64748b; font-size: 14px; text-align: center; padding: 10px;">No tasks found.</div>';
+            return;
+        }
+
+        filteredTasks.forEach(t => {
+            const dateStr = t.deadline ? new Date(t.deadline).toLocaleString() : 'No End Date';
+            list.innerHTML += `
+                <div class="list-item">
+                    <div class="item-details">
+                        <span class="item-title ${t.status === 'done' ? 'text-green' : ''}">${t.name}</span>
+                        <span class="item-sub">${dateStr}</span>
+                    </div>
+                    <div class="action-icons-wrap">
+                        <button class="icon-btn text-blue" onclick="editTask(${t.id})">✎</button>
+                        <button class="icon-btn text-red" onclick="deleteTask(${t.id})">✖</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function renderMatrix() {
+        ['ui', 'uni', 'nui', 'nuni'].forEach(id => document.getElementById(`m-${id}`).innerHTML = '');
+        tasks.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.innerHTML = `
+                <div class="item-details">
+                    <span class="item-title ${t.status === 'done' ? 'text-green' : ''}">${t.name}</span>
+                    <span class="item-sub">${t.deadline ? new Date(t.deadline).toLocaleString() : 'No Deadline'}</span>
+                </div>
+                <div class="action-icons-wrap">
+                    <button class="icon-btn text-blue" onclick="editTask(${t.id})">✎</button>
+                    <button class="icon-btn text-red" onclick="deleteTask(${t.id})">✖</button>
+                </div>
+            `;
+            document.getElementById(`m-${t.matrix}`).appendChild(div);
+        });
+    }
+
+    // --- SCREEN 3: TEAMS & MEMBERS ---
+    function saveTeam() {
+        const id = document.getElementById('tm-id').value;
+        const name = document.getElementById('tm-name').value;
+        if (!name) return alert("Team name required.");
+        if (id) teams.find(x => x.id == id).name = name;
+        else teams.push({ id: Date.now(), name });
+        document.getElementById('tm-id').value = '';
+        document.getElementById('tm-name').value = '';
+        saveData();
+    }
+
+    function editTeam(id) {
+        document.getElementById('tm-id').value = id;
+        document.getElementById('tm-name').value = teams.find(x => x.id == id).name;
+    }
+
+    function deleteTeam(id) {
+        if(confirm("Delete team? Members will lose team association.")) {
+            teams = teams.filter(t => t.id !== id);
+            members.forEach(m => { if(m.teamId == id) m.teamId = null; });
+            saveData();
+        }
+    }
+
+    function saveMember() {
+        const id = document.getElementById('mem-id').value;
+        const name = document.getElementById('mem-name').value;
+        const teamId = document.getElementById('mem-team').value;
+        if (!name) return alert("Member name required.");
+        if (id) {
+            const m = members.find(x => x.id == id);
+            m.name = name; m.teamId = teamId;
+        } else {
+            members.push({ id: Date.now(), name, teamId });
+        }
+        cancelMemberEdit();
+        saveData();
+    }
+
+    function editMember(id) {
+        const m = members.find(x => x.id == id);
+        document.getElementById('mem-id').value = m.id;
+        document.getElementById('mem-name').value = m.name;
+        document.getElementById('mem-team').value = m.teamId || '';
+        document.getElementById('mem-cancel').classList.remove('hidden');
+    }
+
+    function cancelMemberEdit() {
+        document.getElementById('mem-id').value = '';
+        document.getElementById('mem-name').value = '';
+        document.getElementById('mem-team').value = '';
+        document.getElementById('mem-cancel').classList.add('hidden');
+    }
+
+    function deleteMember(id) {
+        if(confirm("Delete member?")) { members = members.filter(m => m.id !== id); saveData(); }
+    }
+
+    function renderTeams() {
+        const tList = document.getElementById('team-list'); 
+        const tSearch = document.getElementById('search-teams').value.toLowerCase();
+        tList.innerHTML = '';
+        
+        teams.filter(t => t.name.toLowerCase().includes(tSearch)).forEach(t => {
+            tList.innerHTML += `<div class="list-item"><span class="item-title">${t.name}</span>
+            <div class="action-icons-wrap"><button class="icon-btn text-blue" onclick="editTeam(${t.id})">✎</button>
+            <button class="icon-btn text-red" onclick="deleteTeam(${t.id})">✖</button></div></div>`;
+        });
+
+        const mList = document.getElementById('member-list'); 
+        const mSearch = document.getElementById('search-members').value.toLowerCase();
+        mList.innerHTML = '';
+        
+        members.filter(m => m.name.toLowerCase().includes(mSearch)).forEach(m => {
+            const tName = m.teamId ? teams.find(x => x.id == m.teamId)?.name || 'Unknown' : 'No Team';
+            mList.innerHTML += `<div class="list-item">
+            <div class="item-details"><span class="item-title">${m.name}</span><span class="item-sub">${tName}</span></div>
+            <div class="action-icons-wrap"><button class="icon-btn text-blue" onclick="editMember(${m.id})">✎</button>
+            <button class="icon-btn text-red" onclick="deleteMember(${m.id})">✖</button></div></div>`;
+        });
+    }
+
+    // --- SCREEN 4: ASSIGNMENTS ---
+    function updateAssigneeDropdown() {
+        const type = document.getElementById('asg-type').value;
+        const target = document.getElementById('asg-target');
+        target.innerHTML = '';
+        if (type === 'team') {
+            teams.forEach(t => target.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+        } else {
+            members.forEach(m => target.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+        }
+    }
+
+    function assignTask() {
+        const tId = document.getElementById('asg-task').value;
+        const type = document.getElementById('asg-type').value;
+        const targetId = document.getElementById('asg-target').value;
+        if (!tId || !targetId) return alert("Select task and assignee.");
+        
+        const t = tasks.find(x => x.id == tId);
+        t.assignType = type; t.assignId = targetId;
+        saveData();
+    }
+
+    function removeAssignment(tId) {
+        const t = tasks.find(x => x.id == tId);
+        t.assignType = 'none'; t.assignId = null;
+        saveData();
+    }
+
+    function renderAssignments() {
+        const list = document.getElementById('assignment-list'); list.innerHTML = '';
+        tasks.filter(t => t.assignType !== 'none').forEach(t => {
+            let assigneeName = "Unknown";
+            if (t.assignType === 'team') assigneeName = teams.find(x => x.id == t.assignId)?.name || "Deleted Team";
+            if (t.assignType === 'member') assigneeName = members.find(x => x.id == t.assignId)?.name || "Deleted Member";
+            
+            list.innerHTML += `<div class="list-item">
+            <div class="item-details"><span class="item-title">${t.name}</span><span class="item-sub text-blue">assigned to ${assigneeName}</span></div>
+            <div class="action-icons-wrap"><button class="icon-btn text-red" onclick="removeAssignment(${t.id})" title="Remove Assignment">✖</button></div></div>`;
+        });
+    }
+
+    // --- SCREEN 5: PROGRESS DASHBOARD ---
+    function updateTaskStatus(tId, selectObj) {
+        tasks.find(x => x.id == tId).status = selectObj.value;
+        saveData();
+    }
+
+    function renderProgress() {
+        ['todo', 'wip', 'done', 'onhold', 'overdue'].forEach(id => document.getElementById(`p-${id}`).innerHTML = '');
+        const now = new Date().getTime();
+
+        tasks.forEach(t => {
+            const isOverdue = t.status !== 'done' && t.deadline && new Date(t.deadline).getTime() < now;
+            let assignee = "Unassigned";
+            if (t.assignType === 'team') assignee = "Team: " + (teams.find(x => x.id == t.assignId)?.name || "Del");
+            if (t.assignType === 'member') assignee = (members.find(x => x.id == t.assignId)?.name || "Del");
+
+            const card = `
+                <div class="task-card">
+                    <div class="item-title">${t.name}</div>
+                    <div class="item-sub">${assignee}</div>
+                    <select onchange="updateTaskStatus(${t.id}, this)">
+                        <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>To Do</option>
+                        <option value="wip" ${t.status === 'wip' ? 'selected' : ''}>WIP</option>
+                        <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
+                        <option value="onhold" ${t.status === 'onhold' ? 'selected' : ''}>On Hold</option>
+                    </select>
+                </div>`;
+            
+            if (isOverdue) document.getElementById('p-overdue').innerHTML += card;
+            else document.getElementById(`p-${t.status}`).innerHTML += card;
+        });
+    }
+
+    // --- SCREEN 6: CHARTS ---
+    function renderChart() {
+        const tFilt = document.getElementById('ch-team').value;
+        const mFilt = document.getElementById('ch-month').value;
+        const yFilt = document.getElementById('ch-year').value;
+        const now = new Date().getTime();
+
+        let filtered = tasks.filter(t => {
+            let passTeam = false;
+            if (tFilt === 'all') passTeam = true;
+            else if (t.assignType === 'team' && t.assignId == tFilt) passTeam = true;
+            else if (t.assignType === 'member') {
+                const m = members.find(x => x.id == t.assignId);
+                if (m && m.teamId == tFilt) passTeam = true;
+            }
+
+            let passDate = true;
+            if (t.deadline) {
+                const d = new Date(t.deadline);
+                if (mFilt !== 'all' && d.getMonth() != mFilt) passDate = false;
+                if (yFilt !== 'all' && d.getFullYear() != yFilt) passDate = false;
+            } else if (mFilt !== 'all' || yFilt !== 'all') {
+                passDate = false; 
+            }
+
+            return passTeam && passDate;
+        });
+
+        const counts = { todo: 0, wip: 0, done: 0, onhold: 0, overdue: 0 };
+        filtered.forEach(t => {
+            if (t.status !== 'done' && t.deadline && new Date(t.deadline).getTime() < now) counts.overdue++;
+            else counts[t.status]++;
+        });
+
+        const data = [
+            { label: 'To Do', count: counts.todo, color: '#64748b' },
+            { label: 'WIP', count: counts.wip, color: '#f59e0b' },
+            { label: 'Done', count: counts.done, color: '#10b981' },
+            { label: 'On Hold', count: counts.onhold, color: '#94a3b8' },
+            { label: 'Over Due', count: counts.overdue, color: '#ef4444' }
+        ].filter(d => d.count > 0);
+
+        document.getElementById('chart-total').innerText = `Total Tasks: ${filtered.length}`;
+        drawPieChart(data);
+    }
+
+    function drawPieChart(data) {
+        const canvas = document.getElementById('pie-chart');
+        const ctx = canvas.getContext('2d');
+        const leg = document.getElementById('chart-legend');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        leg.innerHTML = '';
+
+        if (data.length === 0) {
+            ctx.fillStyle = "#e2e8f0";
+            ctx.beginPath(); ctx.arc(125, 125, 100, 0, 2 * Math.PI); ctx.fill();
+            return;
+        }
+
+        let total = data.reduce((sum, d) => sum + d.count, 0);
+        let startAngle = -Math.PI / 2; 
+
+        data.forEach(d => {
+            const sliceAngle = (2 * Math.PI * d.count) / total;
+            
+            // Draw Colored Slice
+            ctx.beginPath();
+            ctx.moveTo(125, 125);
+            ctx.arc(125, 125, 100, startAngle, startAngle + sliceAngle);
+            ctx.fillStyle = d.color;
+            ctx.fill();
+            
+            // Draw White Stroke
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw Number Text
+            if (d.count > 0) {
+                const midAngle = startAngle + sliceAngle / 2;
+                const textX = 125 + Math.cos(midAngle) * 60;
+                const textY = 125 + Math.sin(midAngle) * 60;
+                
+                ctx.fillStyle = "white";
+                ctx.font = "bold 16px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(d.count, textX, textY);
+            }
+
+            startAngle += sliceAngle;
+            leg.innerHTML += `<div class="legend-item"><div class="legend-color" style="background:${d.color}"></div>${d.label}</div>`;
+        });
+    }
+
+    // --- GLOBAL REFRESH & BACKGROUND WORKER ---
+    function refreshAllViews() {
+        renderAllTasksList();
+        renderMatrix();
+        renderTeams();
+        renderProgress();
+        renderAssignments();
+        
+        const asgTask = document.getElementById('asg-task'); asgTask.innerHTML = '<option value="">Select Task...</option>';
+        tasks.forEach(t => asgTask.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+        
+        const memTeam = document.getElementById('mem-team'); memTeam.innerHTML = '<option value="">Select Team...</option>';
+        teams.forEach(t => memTeam.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+
+        const chTeam = document.getElementById('ch-team'); chTeam.innerHTML = '<option value="all">All Teams</option>';
+        teams.forEach(t => chTeam.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+        
+        updateAssigneeDropdown();
+        if(!document.getElementById('screen-6').classList.contains('hidden')) renderChart();
+    }
+
+    function checkSystemOverdue() {
+        const now = new Date().getTime();
+        let changed = false;
+        tasks.forEach(t => {
+            if (t.status !== 'done' && t.deadline && !t.notified && new Date(t.deadline).getTime() < now) {
+                if ("Notification" in window && Notification.permission === "granted") {
+                    new Notification("Task Overdue!", { body: `Task: ${t.name}`, icon: "icon-192.png" });
+                    playBeep();
+                }
+                t.notified = true; changed = true;
+            }
+        });
+        if(changed) saveData();
+    }
+
+    // Init
+    refreshAllViews();
+    setInterval(checkSystemOverdue, 60000);
+
+</script>
+</body>
+</html>
